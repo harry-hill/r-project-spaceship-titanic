@@ -1,0 +1,141 @@
+---
+title: "spaceship_presentation"
+output: html_document
+date: "`r Sys.Date()`"
+---
+
+Spaceship Titanic Investigation
+
+Goal: to explore trends relevant to the transportation of passengers on Spaceship Titanic
+
+What we knew beforehand:
+
+1.  almost half of these passengers were transported to another dimension during an anomaly
+2.  these records are from before the anomaly, and were recovered from the damaged computer system
+3.  it is possible to predict who was transported based off the information given
+
+Interesting columns at first glance:
+
+1.  Transported - boolean - TRUE if transported, FALSE if not
+2.  HomePlanet - discrete
+3.  CryoSleep - boolean - TRUE if they were in cryo sleep in their cabin for the entire voyage, including when the anomaly occurred
+4.  Cabin - deck / num / side (port/starboard) - location on ship may have mattered, and all cryo sleepers would be in their cabins -\> mutate into three separate columns
+5.  Age - integer - discrete
+
+What I Did:
+
+1.  Investigated transported status vs. each other variable
+2.  Aggregated all amenities together to create a total amount spent by each passenger, as well as a boolean of whether a passenger spent a non-zero amount on amenities
+3.  Duplicated a dataset of just awake passengers to look at amenities without the confounding factor of cryo passengers who could not spend on amenities.
+4.  Separated cabin location into cabin deck, cabin number, and cabin side, then mapped them each onto cryo sleepers and awake passengers spending \$0 on amenities and therefore more likely to be in their cabin during the anomaly
+
+Final Conclusions:
+
+1.  Home planet, destination, and VIP status seemed to have an insignificant relation to whether or not a passenger was transported
+2.  Teenage passengers were more likely than older passengers to be transported
+3.  Passengers in cryo-sleep in their cabins made up about 60% of the total transported passengers
+4.  Awake passengers who spent on amenities were more likely to be transported than those who did not
+5.  Passengers who had their cabins on decks E and G were the least affected, which would include cryo-passengers and likely those who were not using the amenities as well.
+
+Graphs:
+
+1.  Import and Transformations
+
+```{r}
+# read csv file into variable
+spaceship <- read_csv("files/spaceship-titanic/train.csv")
+
+# create new columns for different components of cabin location
+spaceship <- spaceship %>% separate(Cabin, c("Deck", "Number", "Side", sep = "/", remove=FALSE))
+
+# create subset for cryo passengers
+spaceship_cryo <- spaceship %>%
+filter(CryoSleep == TRUE)
+
+# create subset for awake passengers
+spaceship_awake <- spaceship %>%
+filter(CryoSleep == FALSE)
+
+# create subset with awake passengers and new total amenity variable
+spaceship_awake_amenities <- spaceship_awake %>%
+  mutate(spaceship_awake,
+       amenities_total = RoomService + FoodCourt + ShoppingMall + Spa + VRDeck)
+
+# create subset with awake passengers, amenity variable, and new amenity boolean
+spaceship_awake_amenity_bool <- spaceship_awake_amenities %>%
+  mutate(amenity_bool = case_when(amenities_total > 0 ~ TRUE, 
+                                    amenities_total == 0 ~ FALSE))
+
+# create subset with awake passengers who did not use amenities
+spaceship_awake_no_amenities <- spaceship_awake_aminity_bool %>%
++ filter(amenity_bool == FALSE)
+
+# create subset building block for all passengers with total amenity variable
+spaceship_transported_1 <- spaceship %>%
+  mutate(spaceship, amenities_total = RoomService + FoodCourt + ShoppingMall + Spa + VRDeck)
+
+# all passengers with both amenities variables
+spaceship_transported_2 <- spaceship_transported_1 %>%
+  mutate(spaceship, amenities_bool = case_when(ameneties_total > 0 ~ TRUE, amenities_total == 0 ~ FALSE))
+```
+
+2.  Graph Age vs. Transported in a Histogram
+
+    Teenage passengers had higher rates of transport than all older passengers.
+
+```{r}
+ggplot(data = spaceship)+
+  geom_histogram(mapping = aes(x = Age, fill = Transported))
+```
+
+3.  Graph Cryo-Passengers vs. Cabin Location vs. Transported
+
+    Most cryo-passengers were transported, but those on decks E and G were safer, especially those on the Port side of the G deck.
+
+```{r}
+ggplot(data = spaceship_cryo)+
+  geom_bar(mapping = aes(x = Deck, fill = Transported, na.rm = TRUE))+
+  facet_wrap(~Side, nrow = 2)
+```
+
+4.  Graph Awake Passengers; Whether they Spent \>0\$ on Amenities vs. Transported
+
+    Passengers who spent money on amenities were less likely to be transported than those who did not spend.
+
+```{r}
+ggplot(data = spaceship_awake_amenity_bool)+
+  geom_bar(mapping = aes(x = amenity_bool, fill = Transported, na.rm = TRUE))
+```
+
+5.  Graph Awake Passengers who spent \$0 ; Cabin Location vs. Transported
+
+    Less likely to be transported if they had a cabin on decks E and G, similar trend to cryo sleepers
+
+```{r}
+ggplot(data = spaceship_awake_no_ameneties)+
+  geom_bar(mapping = aes(x = Deck, fill = Transported, na.rm = TRUE))+
+  facet_wrap(~Side, nrow = 2)
+```
+
+6.  Graph Cryo-Sleep vs. Transported
+
+    Cryo-Sleepers only made up about 1/3 of total passengers
+
+    ```{r}
+    ggplot(data = spaceship)+
+      geom_bar(mapping = aes(x = CryoSleep))
+    ```
+
+    Most cryo-sleepers were transported, at a much higher rate than those who were awake
+
+    ```{r}
+    ggplot(data = spaceship) +
+      geom_bar(mapping = aes(x = CryoSleep, fill = Transported))
+    ```
+
+Cryo-Sleepers made up 50-60% of those who were transported, even though they were only 1/3 of passengers
+
+```{r}
+ggplot(data = spaceship)+
+  geom_bar(mapping = aes(x = Transported, fill = CryoSleep))
+```
